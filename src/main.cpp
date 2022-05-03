@@ -1,28 +1,30 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+
 #include <iostream>
+#include <fstream>
 #include <stdexcept>
 #include <vector>
 #include <optional>
 #include <set>
 #include <limits>
 #include <algorithm>
-#include <fstream>
 
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 const std::string NAME = "Vulkan";
 
-// Extensions names
+
 const std::vector<const char *> device_extensions =
     {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
-// Validation Layers
+
 const std::vector<const char *> validation_layers =
     {
         "VK_LAYER_KHRONOS_validation"};
+
 
 #ifdef NDEBUG
 const bool enable_validation_layers = false;
@@ -96,8 +98,19 @@ private:
     std::vector<VkImage> swapchain_images;
     VkFormat swapchain_image_format;
     VkExtent2D swapchain_extent;
-
     std::vector<VkImageView> swapchain_image_views;
+    std::vector<VkFramebuffer> swapchain_frame_buffers;
+
+    VkRenderPass render_pass;
+    VkPipelineLayout pipeline_layout;
+    VkPipeline graphics_pipeline;
+
+    VkCommandPool command_pool;
+    VkCommandBuffer command_buffer;
+
+    VkSemaphore image_available_semaphore;
+    VkSemaphore render_finished_semaphore;
+    VkFence in_flight_fence;
 
     void init_window()
     {
@@ -122,7 +135,12 @@ private:
         create_logical_device();
         create_swapchain();
         create_image_views();
+        create_render_pass();
         create_graphics_pipeline();
+        create_frame_buffers();
+        create_command_pool();
+        create_command_buffer();
+        create_sync_objects();
     }
 
     void main_loop()
@@ -130,21 +148,42 @@ private:
         while (!glfwWindowShouldClose(window))
         {
             glfwPollEvents();
+            draw_frame();
         }
+
+        vkDeviceWaitIdle(device);
     }
 
     void cleanup()
     {
+        vkDestroySemaphore(device, render_finished_semaphore, nullptr);
+        vkDestroySemaphore(device, image_available_semaphore, nullptr);
+        vkDestroyFence(device, in_flight_fence, nullptr);
+
+        vkDestroyCommandPool(device, command_pool, nullptr);
+
+        for (auto framebuffer : swapchain_frame_buffers)
+        {
+            vkDestroyFramebuffer(device, framebuffer, nullptr);
+        }
+
+        vkDestroyPipeline(device, graphics_pipeline, nullptr);
+        vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
+        vkDestroyRenderPass(device, render_pass, nullptr);
+
         for (auto image_view : swapchain_image_views)
         {
             vkDestroyImageView(device, image_view, nullptr);
         }
+
         vkDestroySwapchainKHR(device, swapchain, nullptr);
         vkDestroyDevice(device, nullptr);
+
         if (enable_validation_layers)
         {
             destroy_debug_utils_manager_EXT(instance, debug_messenger, nullptr);
         }
+
         vkDestroySurfaceKHR(instance, surface, nullptr);
         vkDestroyInstance(instance, nullptr);
 
@@ -171,7 +210,7 @@ private:
         if (enable_validation_layers && !check_validation_layers_support())
             throw std::runtime_error("Validation layers are not available");
 
-        VkApplicationInfo app_info{};
+        VkApplicationInfo app_info {};
         app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         app_info.pApplicationName = "Vulkan";
         app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
@@ -179,7 +218,7 @@ private:
         app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
         app_info.apiVersion = VK_API_VERSION_1_0;
 
-        VkInstanceCreateInfo create_info{};
+        VkInstanceCreateInfo create_info {};
         create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         create_info.pApplicationInfo = &app_info;
 
@@ -261,7 +300,7 @@ private:
         float queue_priority = 1.0f;
         for (uint32_t queue_familiy : unique_queue_families)
         {
-            VkDeviceQueueCreateInfo queue_create_info{};
+            VkDeviceQueueCreateInfo queue_create_info {};
             queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
             queue_create_info.queueFamilyIndex = queue_familiy;
             queue_create_info.queueCount = 1;
@@ -270,9 +309,9 @@ private:
             queue_create_infos.push_back(queue_create_info);
         }
 
-        VkPhysicalDeviceFeatures device_features{};
+        VkPhysicalDeviceFeatures device_features {};
 
-        VkDeviceCreateInfo create_info{};
+        VkDeviceCreateInfo create_info {};
         create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         create_info.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());
         create_info.pQueueCreateInfos = queue_create_infos.data();
@@ -295,7 +334,7 @@ private:
             throw std::runtime_error("Failed to create logical device");
         }
         vkGetDeviceQueue(device, indices.graphics_family.value(), 0, &graphics_queue);
-        vkGetDeviceQueue(device, indices.present_family.value(), 0, &graphics_queue);
+        vkGetDeviceQueue(device, indices.present_family.value(), 0, &present_queue);
     }
 
     void create_swapchain()
@@ -381,6 +420,48 @@ private:
         
     }
 
+    void create_render_pass()
+    {
+        VkAttachmentDescription color_attachment {};
+        color_attachment.format = swapchain_image_format;
+        color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+        color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+        VkAttachmentReference color_attachment_reference {};
+        color_attachment_reference.attachment = 0;
+        color_attachment_reference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+        VkSubpassDescription subpass_description {};
+        subpass_description.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass_description.colorAttachmentCount = 1;
+        subpass_description.pColorAttachments = &color_attachment_reference;
+
+        VkSubpassDependency dependency {};
+        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependency.dstSubpass = 0;
+        dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.srcAccessMask = 0;
+        dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+        VkRenderPassCreateInfo render_pass_create_info {};
+        render_pass_create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        render_pass_create_info.attachmentCount = 1;
+        render_pass_create_info.pAttachments = &color_attachment;
+        render_pass_create_info.subpassCount = 1;
+        render_pass_create_info.pSubpasses = &subpass_description;
+        render_pass_create_info.dependencyCount = 1;
+        render_pass_create_info.pDependencies = &dependency;
+
+        if (vkCreateRenderPass(device, &render_pass_create_info, nullptr, &render_pass) != VK_SUCCESS)
+            throw std::runtime_error("Failed to create render pass");
+    }
+
     void create_graphics_pipeline()
     {
         auto vert_shader_code = read_file("../../src/shaders/vert.spv");
@@ -403,11 +484,268 @@ private:
 
         VkPipelineShaderStageCreateInfo shader_stages[] = {vert_shader_create_info, frag_shader_create_info};
 
+        VkPipelineVertexInputStateCreateInfo vertex_input_create_info {};
+        vertex_input_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        vertex_input_create_info.vertexBindingDescriptionCount = 0;
+        vertex_input_create_info.pVertexBindingDescriptions = nullptr;
+        vertex_input_create_info.vertexAttributeDescriptionCount = 0;
+        vertex_input_create_info.pVertexAttributeDescriptions = nullptr;
+
+        VkPipelineInputAssemblyStateCreateInfo input_assembly_create_info {};
+        input_assembly_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        input_assembly_create_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        input_assembly_create_info.primitiveRestartEnable = VK_FALSE;
+
+        VkViewport viewport {};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = (float)swapchain_extent.width;
+        viewport.height = (float)swapchain_extent.height;
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+
+        VkRect2D scissor {};
+        scissor.offset = {0, 0};
+        scissor.extent = swapchain_extent;
+
+        VkPipelineViewportStateCreateInfo viewport_state_create_info{};
+        viewport_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        viewport_state_create_info.viewportCount = 1;
+        viewport_state_create_info.pViewports = &viewport;
+        viewport_state_create_info.scissorCount = 1;
+        viewport_state_create_info.pScissors = &scissor;
+
+        VkPipelineRasterizationStateCreateInfo rasterization_state_create_info {};
+        rasterization_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        rasterization_state_create_info.depthClampEnable = VK_FALSE;
+        rasterization_state_create_info.rasterizerDiscardEnable = VK_FALSE;
+        rasterization_state_create_info.polygonMode = VK_POLYGON_MODE_FILL;
+        rasterization_state_create_info.lineWidth = 1.0f;
+        rasterization_state_create_info.cullMode = VK_CULL_MODE_BACK_BIT;
+        rasterization_state_create_info.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        rasterization_state_create_info.depthBiasEnable = VK_FALSE;
+        rasterization_state_create_info.depthBiasConstantFactor = 0.0f;
+        rasterization_state_create_info.depthBiasClamp = 0.0f;
+        rasterization_state_create_info.depthBiasSlopeFactor = 0.0f;
+
+        VkPipelineMultisampleStateCreateInfo multisample_state_create_info {};
+        multisample_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+        multisample_state_create_info.sampleShadingEnable = VK_FALSE;
+        multisample_state_create_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        multisample_state_create_info.minSampleShading = 1.0f;
+        multisample_state_create_info.pSampleMask = nullptr;
+        multisample_state_create_info.alphaToCoverageEnable = VK_FALSE;
+        multisample_state_create_info.alphaToOneEnable = VK_FALSE;
+
+        VkPipelineColorBlendAttachmentState color_blend_attachment_create_info {};
+        color_blend_attachment_create_info.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        color_blend_attachment_create_info.blendEnable = VK_FALSE;
+        color_blend_attachment_create_info.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+        color_blend_attachment_create_info.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+        color_blend_attachment_create_info.colorBlendOp = VK_BLEND_OP_ADD;
+        color_blend_attachment_create_info.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        color_blend_attachment_create_info.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+        color_blend_attachment_create_info.alphaBlendOp = VK_BLEND_OP_ADD;
+
+        VkPipelineColorBlendStateCreateInfo color_blend_state_create_info {};
+        color_blend_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        color_blend_state_create_info.logicOpEnable = VK_FALSE;
+        color_blend_state_create_info.logicOp = VK_LOGIC_OP_COPY;
+        color_blend_state_create_info.attachmentCount = 1;
+        color_blend_state_create_info.pAttachments = &color_blend_attachment_create_info;
+        color_blend_state_create_info.blendConstants[0] = 0.0f;
+        color_blend_state_create_info.blendConstants[1] = 0.0f;
+        color_blend_state_create_info.blendConstants[2] = 0.0f;
+        color_blend_state_create_info.blendConstants[3] = 0.0f;
+
+        std::vector<VkDynamicState> dynamic_states = 
+        {
+            VK_DYNAMIC_STATE_VIEWPORT,
+            VK_DYNAMIC_STATE_LINE_WIDTH
+        };
+
+        VkPipelineDynamicStateCreateInfo dynamic_state_create_info {};
+        dynamic_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+        dynamic_state_create_info.dynamicStateCount = static_cast<uint32_t>(dynamic_states.size());
+        dynamic_state_create_info.pDynamicStates = dynamic_states.data();
+
+        VkPipelineLayoutCreateInfo pipeline_layout_create_info {};
+        pipeline_layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipeline_layout_create_info.setLayoutCount = 0;
+        pipeline_layout_create_info.pSetLayouts = nullptr;
+        pipeline_layout_create_info.pushConstantRangeCount = 0;
+        pipeline_layout_create_info.pPushConstantRanges = nullptr;
+
+        if (vkCreatePipelineLayout(device, &pipeline_layout_create_info, nullptr, &pipeline_layout) != VK_SUCCESS) 
+            throw std::runtime_error("Failed to create pipeline layout");
+
+        VkGraphicsPipelineCreateInfo pipeline_create_info {};
+        pipeline_create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        pipeline_create_info.stageCount = 2;
+        pipeline_create_info.pStages = shader_stages;
+        pipeline_create_info.pVertexInputState = &vertex_input_create_info;
+        pipeline_create_info.pInputAssemblyState = &input_assembly_create_info;
+        pipeline_create_info.pViewportState = &viewport_state_create_info;
+        pipeline_create_info.pRasterizationState = &rasterization_state_create_info;
+        pipeline_create_info.pMultisampleState = &multisample_state_create_info;
+        pipeline_create_info.pDepthStencilState = nullptr;
+        pipeline_create_info.pColorBlendState = &color_blend_state_create_info;
+        pipeline_create_info.pDynamicState = nullptr;
+        pipeline_create_info.layout = pipeline_layout;
+        pipeline_create_info.renderPass = render_pass;
+        pipeline_create_info.subpass = 0;
+        pipeline_create_info.basePipelineHandle = VK_NULL_HANDLE;
+        pipeline_create_info.basePipelineIndex = -1;
+
+        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &graphics_pipeline) != VK_SUCCESS)
+            throw std::runtime_error("Failed to create graphics pipeline");
+
         vkDestroyShaderModule(device, frag_shader_module, nullptr);
         vkDestroyShaderModule(device, vert_shader_module, nullptr);
     }
 
+    void create_frame_buffers()
+    {
+        swapchain_frame_buffers.resize(swapchain_image_views.size());
+
+        for (size_t i = 0; i < swapchain_image_views.size(); i++)
+        {
+            VkImageView attachments[] = 
+            {
+                swapchain_image_views[i]
+            };
+
+            VkFramebufferCreateInfo framebuffer_create_info {};
+            framebuffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            framebuffer_create_info.renderPass = render_pass;
+            framebuffer_create_info.attachmentCount = 1;
+            framebuffer_create_info.pAttachments = attachments;
+            framebuffer_create_info.width = swapchain_extent.width;
+            framebuffer_create_info.height = swapchain_extent.height;
+            framebuffer_create_info.layers = 1;
+
+            if (vkCreateFramebuffer(device, &framebuffer_create_info, nullptr, &swapchain_frame_buffers[i]) != VK_SUCCESS)
+                throw std::runtime_error("Failed to create framebuffer");
+        }
+    }
+
+    void create_command_pool()
+    {
+        QueueFamilyIndices queue_family_indices = find_queue_families(physical_device);
+
+        VkCommandPoolCreateInfo command_pool_create_info {};
+        command_pool_create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        command_pool_create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        command_pool_create_info.queueFamilyIndex = queue_family_indices.graphics_family.value();
+
+        if (vkCreateCommandPool(device, &command_pool_create_info, nullptr, &command_pool) != VK_SUCCESS)
+            throw std::runtime_error("Failed to create command pool");
+    }
+
+    void create_command_buffer()
+    {
+        VkCommandBufferAllocateInfo command_buffer_allocate_info {};
+        command_buffer_allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        command_buffer_allocate_info.commandPool = command_pool;
+        command_buffer_allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        command_buffer_allocate_info.commandBufferCount = 1;
+
+        if (vkAllocateCommandBuffers(device, &command_buffer_allocate_info, &command_buffer) != VK_SUCCESS)
+            throw std::runtime_error("Failed to allocate command buffers");
+    }
+
+    void create_sync_objects()
+    {
+        VkSemaphoreCreateInfo semaphore_create_info {};
+        semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+        VkFenceCreateInfo fence_create_info {};
+        fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+        if (vkCreateSemaphore(device, &semaphore_create_info, nullptr, &image_available_semaphore) != VK_SUCCESS ||
+            vkCreateSemaphore(device, &semaphore_create_info, nullptr, &render_finished_semaphore) != VK_SUCCESS ||
+            vkCreateFence(device, &fence_create_info, nullptr, &in_flight_fence) != VK_SUCCESS)
+            throw std::runtime_error("Failed to create sync objects");
+    }
+
     // Utils
+    void draw_frame()
+    {
+        vkWaitForFences(device, 1, &in_flight_fence, VK_TRUE, UINT64_MAX);
+        vkResetFences(device, 1, &in_flight_fence);
+
+        uint32_t image_index;
+        vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, image_available_semaphore, VK_NULL_HANDLE, &image_index);
+
+        vkResetCommandBuffer(command_buffer, 0);
+        record_command_buffer(command_buffer, image_index);
+
+        VkSubmitInfo submit_info {};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+        VkSemaphore wait_semaphores[] = {image_available_semaphore};
+        VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        submit_info.waitSemaphoreCount = 1;
+        submit_info.pWaitSemaphores = wait_semaphores;
+        submit_info.pWaitDstStageMask = wait_stages;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &command_buffer;
+
+        VkSemaphore signal_semaphores[] = {render_finished_semaphore};
+        submit_info.signalSemaphoreCount = 1;
+        submit_info.pSignalSemaphores = signal_semaphores;
+
+        if (vkQueueSubmit(graphics_queue, 1, &submit_info, in_flight_fence) != VK_SUCCESS)
+            throw std::runtime_error("Failed to submit draw command buffer");
+
+        VkPresentInfoKHR present_info {};
+        present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+
+        present_info.waitSemaphoreCount = 1;
+        present_info.pWaitSemaphores = signal_semaphores;
+
+        VkSwapchainKHR swapchains[] = {swapchain};
+        present_info.swapchainCount = 1;
+        present_info.pSwapchains = swapchains;
+        present_info.pImageIndices = &image_index;
+        present_info.pResults = nullptr;
+
+        vkQueuePresentKHR(present_queue, &present_info);
+    }
+
+    void record_command_buffer(VkCommandBuffer command_buffer, uint32_t image_index)
+    {
+        VkCommandBufferBeginInfo command_buffer_begin_info {};
+        command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        command_buffer_begin_info.flags = 0;
+        command_buffer_begin_info.pInheritanceInfo = nullptr;
+
+        if (vkBeginCommandBuffer(command_buffer, &command_buffer_begin_info) != VK_SUCCESS)
+            throw std::runtime_error("Failed to begin recording command buffer");
+
+        VkRenderPassBeginInfo render_pass_begin_info {};
+        render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        render_pass_begin_info.renderPass = render_pass;
+        render_pass_begin_info.framebuffer = swapchain_frame_buffers[image_index];
+        render_pass_begin_info.renderArea.offset = {0, 0};
+        render_pass_begin_info.renderArea.extent = swapchain_extent;
+
+        VkClearValue clear_color = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+        render_pass_begin_info.clearValueCount = 1;
+        render_pass_begin_info.pClearValues = &clear_color;
+
+        vkCmdBeginRenderPass(command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+
+        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
+        vkCmdDraw(command_buffer, 3, 1, 0, 0);
+
+        vkCmdEndRenderPass(command_buffer);
+
+        if (vkEndCommandBuffer(command_buffer) != VK_SUCCESS)
+            throw std::runtime_error("Failed to record command buffer");
+    }
+
     bool is_device_suitable(VkPhysicalDevice device)
     {
         QueueFamilyIndices indices = find_queue_families(device);
@@ -600,6 +938,7 @@ private:
     VkShaderModule create_shader_module(const std::vector<char>& code)
     {
         VkShaderModuleCreateInfo create_info {};
+        create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         create_info.codeSize = code.size();
         create_info.pCode = reinterpret_cast<const uint32_t*>(code.data());
 
