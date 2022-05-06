@@ -16,14 +16,10 @@ const uint32_t HEIGHT = 600;
 const std::string NAME = "Vulkan";
 
 
-const std::vector<const char *> device_extensions =
-    {
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+const std::vector<const char *> device_extensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 
-const std::vector<const char *> validation_layers =
-    {
-        "VK_LAYER_KHRONOS_validation"};
+const std::vector<const char *> validation_layers = {"VK_LAYER_KHRONOS_validation"};
 
 
 #ifdef NDEBUG
@@ -31,6 +27,7 @@ const bool enable_validation_layers = false;
 #else
 const bool enable_validation_layers = true;
 #endif
+
 
 VkResult create_debug_utils_messenger_EXT(
     VkInstance instance,
@@ -43,15 +40,15 @@ VkResult create_debug_utils_messenger_EXT(
     return VK_ERROR_EXTENSION_NOT_PRESENT;
 }
 
-void destroy_debug_utils_manager_EXT(
-    VkInstance instance, VkDebugUtilsMessengerEXT debug_messenger, const VkAllocationCallbacks *p_allocator)
+void destroy_debug_utils_manager_EXT(VkInstance instance, VkDebugUtilsMessengerEXT debug_messenger, const VkAllocationCallbacks *p_allocator)
 {
     auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
     if (func != nullptr)
         func(instance, debug_messenger, p_allocator);
 }
 
-struct QueueFamilyIndices
+
+struct QueueFamiliesIndices
 {
     std::optional<uint32_t> graphics_family;
     std::optional<uint32_t> present_family;
@@ -62,12 +59,14 @@ struct QueueFamilyIndices
     }
 };
 
+
 struct SwapchainSupportDetails
 {
     VkSurfaceCapabilitiesKHR capabilities;
     std::vector<VkSurfaceFormatKHR> formats;
     std::vector<VkPresentModeKHR> present_modes;
 };
+
 
 class VkApp
 {
@@ -95,11 +94,11 @@ private:
     VkQueue present_queue;
 
     VkSwapchainKHR swapchain;
-    std::vector<VkImage> swapchain_images;
     VkFormat swapchain_image_format;
     VkExtent2D swapchain_extent;
+    std::vector<VkImage> swapchain_images;
     std::vector<VkImageView> swapchain_image_views;
-    std::vector<VkFramebuffer> swapchain_frame_buffers;
+    std::vector<VkFramebuffer> swapchain_framebuffers;
 
     VkRenderPass render_pass;
     VkPipelineLayout pipeline_layout;
@@ -137,7 +136,7 @@ private:
         create_image_views();
         create_render_pass();
         create_graphics_pipeline();
-        create_frame_buffers();
+        create_framebuffers();
         create_command_pool();
         create_command_buffer();
         create_sync_objects();
@@ -162,7 +161,7 @@ private:
 
         vkDestroyCommandPool(device, command_pool, nullptr);
 
-        for (auto framebuffer : swapchain_frame_buffers)
+        for (auto framebuffer : swapchain_framebuffers)
         {
             vkDestroyFramebuffer(device, framebuffer, nullptr);
         }
@@ -192,19 +191,6 @@ private:
     }
 
     // Vulkan objects creating
-    void populate_debug_messenger_create_info(VkDebugUtilsMessengerCreateInfoEXT &create_info)
-    {
-        create_info = {};
-        create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        create_info.messageType =
-            // VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
-            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
-        create_info.pfnUserCallback = debug_callback;
-        create_info.pUserData = nullptr;
-    }
-
     void create_instance()
     {
         if (enable_validation_layers && !check_validation_layers_support())
@@ -213,9 +199,9 @@ private:
         VkApplicationInfo app_info {};
         app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         app_info.pApplicationName = "Vulkan";
-        app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-        app_info.pEngineName = "No Engine";
-        app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+        app_info.applicationVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
+        app_info.pEngineName = nullptr;
+        app_info.engineVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
         app_info.apiVersion = VK_API_VERSION_1_0;
 
         VkInstanceCreateInfo create_info {};
@@ -238,7 +224,7 @@ private:
             create_info.ppEnabledLayerNames = validation_layers.data();
 
             populate_debug_messenger_create_info(debug_create_info);
-            create_info.pNext = (VkDebugUtilsMessengerCreateInfoEXT *)&debug_create_info;
+            create_info.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debug_create_info; // useless cast?
         }
         else
         {
@@ -248,6 +234,23 @@ private:
 
         if (vkCreateInstance(&create_info, nullptr, &instance) != VK_SUCCESS)
             throw std::runtime_error("Failed to create instance");
+    }
+
+    void populate_debug_messenger_create_info(VkDebugUtilsMessengerCreateInfoEXT &create_info)
+    {
+        create_info = {};
+        create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        create_info.messageSeverity = 
+            //VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | 
+            //VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | 
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        create_info.messageType =
+            VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+        create_info.pfnUserCallback = debug_callback;
+        create_info.pUserData = nullptr;
     }
 
     void setup_debug_messenger()
@@ -292,7 +295,7 @@ private:
 
     void create_logical_device()
     {
-        QueueFamilyIndices indices = find_queue_families(physical_device);
+        QueueFamiliesIndices indices = find_queue_families(physical_device);
 
         std::vector<VkDeviceQueueCreateInfo> queue_create_infos;
         std::set<uint32_t> unique_queue_families = {indices.graphics_family.value(), indices.present_family.value()};
@@ -362,7 +365,7 @@ private:
         create_info.imageArrayLayers = 1;
         create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
         
-        QueueFamilyIndices indices = find_queue_families(physical_device);
+        QueueFamiliesIndices indices = find_queue_families(physical_device);
         uint32_t queue_family_indices[] = {indices.graphics_family.value(), indices.present_family.value()};
 
         if (indices.graphics_family != indices.present_family)
@@ -508,7 +511,7 @@ private:
         scissor.offset = {0, 0};
         scissor.extent = swapchain_extent;
 
-        VkPipelineViewportStateCreateInfo viewport_state_create_info{};
+        VkPipelineViewportStateCreateInfo viewport_state_create_info {};
         viewport_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
         viewport_state_create_info.viewportCount = 1;
         viewport_state_create_info.pViewports = &viewport;
@@ -604,9 +607,9 @@ private:
         vkDestroyShaderModule(device, vert_shader_module, nullptr);
     }
 
-    void create_frame_buffers()
+    void create_framebuffers()
     {
-        swapchain_frame_buffers.resize(swapchain_image_views.size());
+        swapchain_framebuffers.resize(swapchain_image_views.size());
 
         for (size_t i = 0; i < swapchain_image_views.size(); i++)
         {
@@ -624,14 +627,14 @@ private:
             framebuffer_create_info.height = swapchain_extent.height;
             framebuffer_create_info.layers = 1;
 
-            if (vkCreateFramebuffer(device, &framebuffer_create_info, nullptr, &swapchain_frame_buffers[i]) != VK_SUCCESS)
+            if (vkCreateFramebuffer(device, &framebuffer_create_info, nullptr, &swapchain_framebuffers[i]) != VK_SUCCESS)
                 throw std::runtime_error("Failed to create framebuffer");
         }
     }
 
     void create_command_pool()
     {
-        QueueFamilyIndices queue_family_indices = find_queue_families(physical_device);
+        QueueFamiliesIndices queue_family_indices = find_queue_families(physical_device);
 
         VkCommandPoolCreateInfo command_pool_create_info {};
         command_pool_create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -678,7 +681,7 @@ private:
         uint32_t image_index;
         vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, image_available_semaphore, VK_NULL_HANDLE, &image_index);
 
-        vkResetCommandBuffer(command_buffer, 0);
+        //vkResetCommandBuffer(command_buffer, 0);
         record_command_buffer(command_buffer, image_index);
 
         VkSubmitInfo submit_info {};
@@ -727,7 +730,7 @@ private:
         VkRenderPassBeginInfo render_pass_begin_info {};
         render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         render_pass_begin_info.renderPass = render_pass;
-        render_pass_begin_info.framebuffer = swapchain_frame_buffers[image_index];
+        render_pass_begin_info.framebuffer = swapchain_framebuffers[image_index];
         render_pass_begin_info.renderArea.offset = {0, 0};
         render_pass_begin_info.renderArea.extent = swapchain_extent;
 
@@ -748,7 +751,7 @@ private:
 
     bool is_device_suitable(VkPhysicalDevice device)
     {
-        QueueFamilyIndices indices = find_queue_families(device);
+        QueueFamiliesIndices indices = find_queue_families(device);
 
         bool extensions_supported = check_device_extensions_support(device);
 
@@ -762,9 +765,9 @@ private:
         return indices.is_complete() && extensions_supported && swapchain_adequate;
     }
 
-    QueueFamilyIndices find_queue_families(VkPhysicalDevice device)
+    QueueFamiliesIndices find_queue_families(VkPhysicalDevice device)
     {
-        QueueFamilyIndices indices;
+        QueueFamiliesIndices indices;
 
         uint32_t queue_families_count = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_families_count, nullptr);
@@ -798,12 +801,14 @@ private:
         std::set<std::string> required_extensions(device_extensions.begin(), device_extensions.end());
 
         for (const auto &extension : available_extensions)
+        {
             required_extensions.erase(extension.extensionName);
+        }
 
         return required_extensions.empty();
     }
 
-    bool check_extensions_support(std::vector<const char *> glfw_extensions)
+    bool check_extensions_support(const std::vector<const char *> &glfw_extensions)
     {
         uint32_t extensions_count = 0;
         vkEnumerateInstanceExtensionProperties(nullptr, &extensions_count, nullptr);
