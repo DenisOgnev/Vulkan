@@ -113,9 +113,9 @@ struct Vertex
 
 struct UniformBufferObject
 {
-	glm::mat4 model;
-	glm::mat4 view;
-	glm::mat4 projection;
+	alignas(16) glm::mat4 model;
+	alignas(16) glm::mat4 view;
+	alignas(16) glm::mat4 projection;
 };
 
 const std::vector<Vertex> vertices =
@@ -186,6 +186,9 @@ private:
 	std::vector<VkBuffer> uniform_buffers;
 	std::vector<VkDeviceMemory> uniform_buffers_memory;
 
+	VkDescriptorPool descriptor_pool;
+	std::vector<VkDescriptorSet> descriptor_sets;
+
 	void init_window()
 	{
 		if (!glfwInit())
@@ -219,6 +222,7 @@ private:
 		create_index_buffer();
 		create_uniform_buffers();
 		create_descriptor_pool();
+		create_descriptor_sets();
 		create_command_buffers();
 		create_sync_objects();
 	}
@@ -244,6 +248,7 @@ private:
 			vkFreeMemory(device, uniform_buffers_memory[i], nullptr);
 		}
 
+		vkDestroyDescriptorPool(device, descriptor_pool, nullptr);
 		vkDestroyDescriptorSetLayout(device, descriptor_set_layout, nullptr);
 
 		vkDestroyBuffer(device, vertex_buffer, nullptr);
@@ -631,7 +636,7 @@ private:
 		rasterization_state_create_info.polygonMode = VK_POLYGON_MODE_FILL;
 		rasterization_state_create_info.lineWidth = 1.0f;
 		rasterization_state_create_info.cullMode = VK_CULL_MODE_BACK_BIT;
-		rasterization_state_create_info.frontFace = VK_FRONT_FACE_CLOCKWISE;
+		rasterization_state_create_info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 		rasterization_state_create_info.depthBiasEnable = VK_FALSE;
 		rasterization_state_create_info.depthBiasConstantFactor = 0.0f;
 		rasterization_state_create_info.depthBiasClamp = 0.0f;
@@ -751,41 +756,6 @@ private:
 			throw std::runtime_error("Failed to create command pool");
 	}
 
-	void create_command_buffers()
-	{
-		command_buffers.resize(MAX_FRAMES_IN_FLIGHT);
-		VkCommandBufferAllocateInfo command_buffer_allocate_info{};
-		command_buffer_allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		command_buffer_allocate_info.commandPool = command_pool;
-		command_buffer_allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		command_buffer_allocate_info.commandBufferCount = (uint32_t)command_buffers.size();
-
-		if (vkAllocateCommandBuffers(device, &command_buffer_allocate_info, command_buffers.data()) != VK_SUCCESS)
-			throw std::runtime_error("Failed to allocate command buffers");
-	}
-
-	void create_sync_objects()
-	{
-		image_available_semaphores.resize(MAX_FRAMES_IN_FLIGHT);
-		render_finished_semaphores.resize(MAX_FRAMES_IN_FLIGHT);
-		in_flight_fences.resize(MAX_FRAMES_IN_FLIGHT);
-
-		VkSemaphoreCreateInfo semaphore_create_info{};
-		semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-		VkFenceCreateInfo fence_create_info{};
-		fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-		fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-		{
-			if (vkCreateSemaphore(device, &semaphore_create_info, nullptr, &image_available_semaphores[i]) != VK_SUCCESS ||
-				vkCreateSemaphore(device, &semaphore_create_info, nullptr, &render_finished_semaphores[i]) != VK_SUCCESS ||
-				vkCreateFence(device, &fence_create_info, nullptr, &in_flight_fences[i]) != VK_SUCCESS)
-				throw std::runtime_error("Failed to create sync objects");
-		}
-	}
-
 	void create_vertex_buffer()
 	{
 		VkDeviceSize buffer_size = sizeof(vertices[0]) * vertices.size();
@@ -845,7 +815,92 @@ private:
 
 	void create_descriptor_pool()
 	{
+		VkDescriptorPoolSize descriptor_pool_size{};
+		descriptor_pool_size.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		descriptor_pool_size.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+		VkDescriptorPoolCreateInfo descriptor_pool_create_info{};
+
+		descriptor_pool_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		descriptor_pool_create_info.poolSizeCount = 1;
+		descriptor_pool_create_info.pPoolSizes = &descriptor_pool_size;	
+		descriptor_pool_create_info.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+		if (vkCreateDescriptorPool(device, &descriptor_pool_create_info, nullptr, &descriptor_pool) != VK_SUCCESS)
+			throw std::runtime_error("Failed to create descriptor pool");
 	}
+
+	void create_descriptor_sets()
+	{
+		std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptor_set_layout);
+		VkDescriptorSetAllocateInfo allocate_info{};
+		allocate_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		allocate_info.descriptorPool = descriptor_pool;
+		allocate_info.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+		allocate_info.pSetLayouts = layouts.data();
+
+		descriptor_sets.resize(MAX_FRAMES_IN_FLIGHT);
+		if (vkAllocateDescriptorSets(device, &allocate_info, descriptor_sets.data()) != VK_SUCCESS)
+			throw std::runtime_error("Failed to allocate descriptor sets");
+
+		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+		{
+			VkDescriptorBufferInfo descriptor_buffer_info{};
+			descriptor_buffer_info.buffer = uniform_buffers[i];
+			descriptor_buffer_info.offset = 0;
+			descriptor_buffer_info.range = sizeof(UniformBufferObject);
+
+			VkWriteDescriptorSet write_descriptor_set{};
+			write_descriptor_set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			write_descriptor_set.dstSet = descriptor_sets[i];
+			write_descriptor_set.dstBinding = 0;
+			write_descriptor_set.dstArrayElement = 0;
+			write_descriptor_set.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			write_descriptor_set.descriptorCount = 1;
+			write_descriptor_set.pBufferInfo = &descriptor_buffer_info;
+			write_descriptor_set.pImageInfo = nullptr;
+			write_descriptor_set.pTexelBufferView = nullptr;
+
+			vkUpdateDescriptorSets(device, 1, &write_descriptor_set, 0, nullptr);
+		}
+		
+	}
+
+	void create_command_buffers()
+	{
+		command_buffers.resize(MAX_FRAMES_IN_FLIGHT);
+		VkCommandBufferAllocateInfo command_buffer_allocate_info{};
+		command_buffer_allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		command_buffer_allocate_info.commandPool = command_pool;
+		command_buffer_allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		command_buffer_allocate_info.commandBufferCount = (uint32_t)command_buffers.size();
+
+		if (vkAllocateCommandBuffers(device, &command_buffer_allocate_info, command_buffers.data()) != VK_SUCCESS)
+			throw std::runtime_error("Failed to allocate command buffers");
+	}
+
+	void create_sync_objects()
+	{
+		image_available_semaphores.resize(MAX_FRAMES_IN_FLIGHT);
+		render_finished_semaphores.resize(MAX_FRAMES_IN_FLIGHT);
+		in_flight_fences.resize(MAX_FRAMES_IN_FLIGHT);
+
+		VkSemaphoreCreateInfo semaphore_create_info{};
+		semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+		VkFenceCreateInfo fence_create_info{};
+		fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+		fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+		{
+			if (vkCreateSemaphore(device, &semaphore_create_info, nullptr, &image_available_semaphores[i]) != VK_SUCCESS ||
+				vkCreateSemaphore(device, &semaphore_create_info, nullptr, &render_finished_semaphores[i]) != VK_SUCCESS ||
+				vkCreateFence(device, &fence_create_info, nullptr, &in_flight_fences[i]) != VK_SUCCESS)
+				throw std::runtime_error("Failed to create sync objects");
+		}
+	}
+
 
 	// Utils
 	void draw_frame()
@@ -966,6 +1021,8 @@ private:
 
 		vkCmdBindIndexBuffer(command_buffer, index_buffer, 0, VK_INDEX_TYPE_UINT16);
 
+		vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1, &descriptor_sets[current_frame], 0, nullptr);
+		
 		//vkCmdDraw(command_buffer, static_cast<uint32_t>(vertices.size()), 1, 0, 0);
 		vkCmdDrawIndexed(command_buffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
