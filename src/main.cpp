@@ -269,6 +269,7 @@ private:
 	VkDescriptorPool descriptor_pool;
 	std::vector<VkDescriptorSet> descriptor_sets;
 
+	uint32_t mip_levels;
 	VkImage texture_image;
 	VkDeviceMemory texture_image_memory;
 	VkImageView texture_image_view;
@@ -900,6 +901,7 @@ private:
 		int tex_width, tex_height, tex_channels;
 		stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &tex_width, &tex_height, &tex_channels, STBI_rgb_alpha);
 		VkDeviceSize image_size = tex_width * tex_height * 4;
+		mip_levels = static_cast<uint32_t>(std::floor(std::log2(std::max(tex_width, tex_height)))) + 1;
 
 		if (!pixels)
 			throw std::runtime_error("Failed to load texture image");
