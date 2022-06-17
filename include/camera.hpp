@@ -12,7 +12,7 @@ enum Camera_Movement {
     RIGHT
 };
 
-const float YAW         = -90.0f;
+const float YAW         =  180.0f;
 const float PITCH       =  0.0f;
 const float SPEED       =  2.5f;
 const float SENSITIVITY =  0.1f;
@@ -35,7 +35,7 @@ public:
     float mouse_sensitivity;
     float zoom;
 
-    Camera(glm::vec3 position_vector = glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3 up_vector = glm::vec3(0.0f, -1.0f, 0.0f), float yaw_value = YAW, float pitch_value = PITCH) : front(glm::vec3(0.0f, 0.0f, -1.0f)), movement_speed(SPEED), mouse_sensitivity(SENSITIVITY), zoom(ZOOM)
+    Camera(glm::vec3 position_vector = glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3 up_vector = glm::vec3(0.0f, 0.0f, 1.0f), float yaw_value = YAW, float pitch_value = PITCH) : front(glm::vec3(-1.0f, 0.0f, 0.0f)), movement_speed(SPEED), mouse_sensitivity(SENSITIVITY), zoom(ZOOM)
     {
         position = position_vector;
         world_up = up_vector;
@@ -92,8 +92,9 @@ private:
     void update_camera_vectors()
     {
         front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-        front.y = sin(glm::radians(pitch));
-        front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+        front.y = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+        front.z = sin(glm::radians(pitch));
+
         front = glm::normalize(front);
         
         right = glm::normalize(glm::cross(front, world_up));  
