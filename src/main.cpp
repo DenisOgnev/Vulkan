@@ -442,23 +442,6 @@ private:
 			throw std::runtime_error("Failed to create instance");
 	}
 
-	void populate_debug_messenger_create_info(VkDebugUtilsMessengerCreateInfoEXT& create_info)
-	{
-		create_info = {};
-		create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-		create_info.messageSeverity =
-			//VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | 
-			//VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
-			VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-			VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-		create_info.messageType =
-			VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-			VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
-			VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
-		create_info.pfnUserCallback = debug_callback;
-		create_info.pUserData = nullptr;
-	}
-
 	void setup_debug_messenger()
 	{
 		if (!enable_validation_layers)
@@ -871,33 +854,6 @@ private:
 		vkDestroyShaderModule(device, vert_shader_module, nullptr);
 	}
 
-	void create_framebuffers()
-	{
-		swapchain_framebuffers.resize(swapchain_image_views.size());
-
-		for (size_t i = 0; i < swapchain_image_views.size(); i++)
-		{
-			std::vector<VkImageView> attachments =
-			{
-				color_image_view,
-				depth_image_view,
-				swapchain_image_views[i]
-			};
-
-			VkFramebufferCreateInfo framebuffer_create_info{};
-			framebuffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-			framebuffer_create_info.renderPass = render_pass;
-			framebuffer_create_info.attachmentCount = static_cast<uint32_t>(attachments.size());
-			framebuffer_create_info.pAttachments = attachments.data();
-			framebuffer_create_info.width = swapchain_extent.width;
-			framebuffer_create_info.height = swapchain_extent.height;
-			framebuffer_create_info.layers = 1;
-
-			if (vkCreateFramebuffer(device, &framebuffer_create_info, nullptr, &swapchain_framebuffers[i]) != VK_SUCCESS)
-				throw std::runtime_error("Failed to create framebuffer");
-		}
-	}
-
 	void create_command_pool()
 	{
 		QueueFamiliesIndices queue_family_indices = find_queue_families(physical_device);
@@ -927,6 +883,33 @@ private:
 		depth_image_view = create_image_view(depth_image, depth_format, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 
 		transition_image_layout(depth_image, depth_format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
+	}
+
+	void create_framebuffers()
+	{
+		swapchain_framebuffers.resize(swapchain_image_views.size());
+
+		for (size_t i = 0; i < swapchain_image_views.size(); i++)
+		{
+			std::vector<VkImageView> attachments =
+			{
+				color_image_view,
+				depth_image_view,
+				swapchain_image_views[i]
+			};
+
+			VkFramebufferCreateInfo framebuffer_create_info{};
+			framebuffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+			framebuffer_create_info.renderPass = render_pass;
+			framebuffer_create_info.attachmentCount = static_cast<uint32_t>(attachments.size());
+			framebuffer_create_info.pAttachments = attachments.data();
+			framebuffer_create_info.width = swapchain_extent.width;
+			framebuffer_create_info.height = swapchain_extent.height;
+			framebuffer_create_info.layers = 1;
+
+			if (vkCreateFramebuffer(device, &framebuffer_create_info, nullptr, &swapchain_framebuffers[i]) != VK_SUCCESS)
+				throw std::runtime_error("Failed to create framebuffer");
+		}
 	}
 
 	void create_texture_image()
@@ -993,6 +976,50 @@ private:
 
 		if (vkCreateSampler(device, &sampler_info, nullptr, &texture_sampler) != VK_SUCCESS)
 			throw std::runtime_error("Failed to create texture sampler");
+	}
+
+	void load_model()
+	{
+		tinyobj::attrib_t attrib;
+		std::vector<tinyobj::shape_t> shapes;
+		std::vector<tinyobj::material_t> materials;
+		std::string err;
+
+		if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, MODEL_PATH.c_str()))
+			throw std::runtime_error(err);
+
+		std::unordered_map<Vertex, uint32_t> unique_vertices{};
+
+		for (const auto &shape : shapes)
+		{
+			for (const auto &index : shape.mesh.indices)
+			{
+				Vertex vertex{};
+
+				vertex.pos = 
+				{
+					attrib.vertices[3 * index.vertex_index + 0],
+					attrib.vertices[3 * index.vertex_index + 1],
+					attrib.vertices[3 * index.vertex_index + 2]
+				};
+
+				vertex.tex_coord =
+				{
+					attrib.texcoords[2 * index.texcoord_index + 0],
+					1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+				};
+
+				vertex.color = {1.0f, 1.0f, 1.0f};
+
+				if (unique_vertices.count(vertex) == 0)
+				{
+					unique_vertices[vertex] = static_cast<uint32_t>(vertices.size());
+					vertices.push_back(vertex);
+				}
+
+				indices.push_back(unique_vertices[vertex]);
+			}
+		}
 	}
 
 	void create_vertex_buffer()
@@ -1156,50 +1183,6 @@ private:
 		}
 	}
 
-	void load_model()
-	{
-		tinyobj::attrib_t attrib;
-		std::vector<tinyobj::shape_t> shapes;
-		std::vector<tinyobj::material_t> materials;
-		std::string err;
-
-		if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, MODEL_PATH.c_str()))
-			throw std::runtime_error(err);
-
-		std::unordered_map<Vertex, uint32_t> unique_vertices{};
-
-		for (const auto &shape : shapes)
-		{
-			for (const auto &index : shape.mesh.indices)
-			{
-				Vertex vertex{};
-
-				vertex.pos = 
-				{
-					attrib.vertices[3 * index.vertex_index + 0],
-					attrib.vertices[3 * index.vertex_index + 1],
-					attrib.vertices[3 * index.vertex_index + 2]
-				};
-
-				vertex.tex_coord =
-				{
-					attrib.texcoords[2 * index.texcoord_index + 0],
-					1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
-				};
-
-				vertex.color = {1.0f, 1.0f, 1.0f};
-
-				if (unique_vertices.count(vertex) == 0)
-				{
-					unique_vertices[vertex] = static_cast<uint32_t>(vertices.size());
-					vertices.push_back(vertex);
-				}
-
-				indices.push_back(unique_vertices[vertex]);
-			}
-		}
-	}
-
 
 	// Utils
 	void draw_frame()
@@ -1270,25 +1253,6 @@ private:
 		current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 	}
 
-	void update_uniform_buffer(uint32_t current_image)
-	{
-		static auto start_time = std::chrono::high_resolution_clock::now();
-
-		auto current_time = std::chrono::high_resolution_clock::now();
-		float time = std::chrono::duration<float, std::chrono::seconds::period>(current_time - start_time).count();
-
-		UniformBufferObject ubo{};
-		ubo.model = glm::mat4(1.0f);
-		ubo.model = glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-		ubo.view = camera.get_view_matrix();
-		ubo.projection = glm::perspective(glm::radians(camera.zoom), swapchain_extent.width / (float)swapchain_extent.height, 0.1f, 100.0f);
-		
-		void* data;
-		vkMapMemory(device, uniform_buffers_memory[current_image], 0, sizeof(ubo), 0, &data);
-		memcpy(data, &ubo, sizeof(ubo));
-		vkUnmapMemory(device, uniform_buffers_memory[current_image]);
-	}
-
 	void record_command_buffer(VkCommandBuffer command_buffer, uint32_t image_index)
 	{
 		VkCommandBufferBeginInfo command_buffer_begin_info{};
@@ -1333,6 +1297,25 @@ private:
 			throw std::runtime_error("Failed to record command buffer");
 	}
 
+	void update_uniform_buffer(uint32_t current_image)
+	{
+		static auto start_time = std::chrono::high_resolution_clock::now();
+
+		auto current_time = std::chrono::high_resolution_clock::now();
+		float time = std::chrono::duration<float, std::chrono::seconds::period>(current_time - start_time).count();
+
+		UniformBufferObject ubo{};
+		ubo.model = glm::mat4(1.0f);
+		ubo.model = glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+		ubo.view = camera.get_view_matrix();
+		ubo.projection = glm::perspective(glm::radians(camera.zoom), swapchain_extent.width / (float)swapchain_extent.height, 0.1f, 100.0f);
+		
+		void* data;
+		vkMapMemory(device, uniform_buffers_memory[current_image], 0, sizeof(ubo), 0, &data);
+		memcpy(data, &ubo, sizeof(ubo));
+		vkUnmapMemory(device, uniform_buffers_memory[current_image]);
+	}
+
 	void create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &buffer_memory)
 	{
 		VkBufferCreateInfo buffer_create_info{};
@@ -1356,6 +1339,41 @@ private:
 			throw std::runtime_error("Failed to allocate vertex buffer memory");
 
 		vkBindBufferMemory(device, buffer, buffer_memory, 0);
+	}
+
+	void copy_buffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size)
+	{
+		VkCommandBuffer command_buffer = begin_single_time_commands();
+
+		VkBufferCopy copy_region{};
+		copy_region.srcOffset = 0;
+		copy_region.dstOffset = 0;
+		copy_region.size = size;
+		vkCmdCopyBuffer(command_buffer, src_buffer, dst_buffer, 1, &copy_region);
+
+		end_single_time_commands(command_buffer);
+	}
+
+	void copy_buffer_to_image(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
+	{
+		VkCommandBuffer command_buffer = begin_single_time_commands();
+
+		VkBufferImageCopy region{};
+		region.bufferOffset = 0;
+		region.bufferRowLength = 0;
+		region.bufferImageHeight = 0;
+
+		region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		region.imageSubresource.mipLevel = 0;
+		region.imageSubresource.baseArrayLayer = 0;
+		region.imageSubresource.layerCount = 1;
+
+		region.imageOffset = {0, 0, 0};
+		region.imageExtent = {width, height, 1};
+
+		vkCmdCopyBufferToImage(command_buffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+		end_single_time_commands(command_buffer);
 	}
 
 	void create_image(uint32_t width, uint32_t height, uint32_t mip_levels, VkSampleCountFlagBits num_samples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage &image, VkDeviceMemory &image_memory)
@@ -1393,39 +1411,6 @@ private:
 		vkBindImageMemory(device, image, image_memory, 0);
 	}
 
-	void copy_buffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size)
-	{
-		VkCommandBuffer command_buffer = begin_single_time_commands();
-
-		VkBufferCopy copy_region{};
-		copy_region.srcOffset = 0;
-		copy_region.dstOffset = 0;
-		copy_region.size = size;
-		vkCmdCopyBuffer(command_buffer, src_buffer, dst_buffer, 1, &copy_region);
-
-		end_single_time_commands(command_buffer);
-	}
-
-	VkCommandBuffer begin_single_time_commands()
-	{
-		VkCommandBufferAllocateInfo allocate_info{};
-		allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		allocate_info.commandPool = command_pool;
-		allocate_info.commandBufferCount = 1;
-
-		VkCommandBuffer command_buffer;
-		vkAllocateCommandBuffers(device, &allocate_info, &command_buffer);
-
-		VkCommandBufferBeginInfo begin_info{};
-		begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-		vkBeginCommandBuffer(command_buffer, &begin_info);
-
-		return command_buffer;
-	}
-
 	VkImageView create_image_view(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags, uint32_t mip_levels)
 	{
 		VkImageViewCreateInfo image_view_create_info{};
@@ -1444,21 +1429,6 @@ private:
 			throw std::runtime_error("Failed to create texture image view");
 		
 		return image_view;
-	}
-
-	void end_single_time_commands(VkCommandBuffer command_buffer)
-	{
-		vkEndCommandBuffer(command_buffer);
-
-		VkSubmitInfo submit_info{};
-		submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submit_info.commandBufferCount = 1;
-		submit_info.pCommandBuffers = &command_buffer;
-
-		vkQueueSubmit(graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
-		vkQueueWaitIdle(graphics_queue);
-
-		vkFreeCommandBuffers(device, command_pool, 1, &command_buffer);
 	}
 
 	void generate_mipmaps(VkImage image, VkFormat image_format, int32_t tex_width, int32_t tex_height, uint32_t mip_levels)
@@ -1598,26 +1568,39 @@ private:
 		end_single_time_commands(command_buffer);
 	}
 
-	void copy_buffer_to_image(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
+	VkCommandBuffer begin_single_time_commands()
 	{
-		VkCommandBuffer command_buffer = begin_single_time_commands();
+		VkCommandBufferAllocateInfo allocate_info{};
+		allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		allocate_info.commandPool = command_pool;
+		allocate_info.commandBufferCount = 1;
 
-		VkBufferImageCopy region{};
-		region.bufferOffset = 0;
-		region.bufferRowLength = 0;
-		region.bufferImageHeight = 0;
+		VkCommandBuffer command_buffer;
+		vkAllocateCommandBuffers(device, &allocate_info, &command_buffer);
 
-		region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		region.imageSubresource.mipLevel = 0;
-		region.imageSubresource.baseArrayLayer = 0;
-		region.imageSubresource.layerCount = 1;
+		VkCommandBufferBeginInfo begin_info{};
+		begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-		region.imageOffset = {0, 0, 0};
-		region.imageExtent = {width, height, 1};
+		vkBeginCommandBuffer(command_buffer, &begin_info);
 
-		vkCmdCopyBufferToImage(command_buffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+		return command_buffer;
+	}
 
-		end_single_time_commands(command_buffer);
+	void end_single_time_commands(VkCommandBuffer command_buffer)
+	{
+		vkEndCommandBuffer(command_buffer);
+
+		VkSubmitInfo submit_info{};
+		submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submit_info.commandBufferCount = 1;
+		submit_info.pCommandBuffers = &command_buffer;
+
+		vkQueueSubmit(graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
+		vkQueueWaitIdle(graphics_queue);
+
+		vkFreeCommandBuffers(device, command_pool, 1, &command_buffer);
 	}
 
 	void cleanup_swapchain()
@@ -1708,47 +1691,6 @@ private:
 		return find_supported_format({VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT}, VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
 	}
 
-	VkSampleCountFlagBits get_max_usable_sample_count()
-	{
-		VkPhysicalDeviceProperties physical_device_properties;
-		vkGetPhysicalDeviceProperties(physical_device, &physical_device_properties);
-
-		VkSampleCountFlags counts = physical_device_properties.limits.framebufferColorSampleCounts & physical_device_properties.limits.framebufferDepthSampleCounts;
-
-		if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
-		if (counts & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
-		if (counts & VK_SAMPLE_COUNT_16_BIT) { return VK_SAMPLE_COUNT_16_BIT; }
-		if (counts & VK_SAMPLE_COUNT_8_BIT) { return VK_SAMPLE_COUNT_8_BIT; }
-		if (counts & VK_SAMPLE_COUNT_4_BIT) { return VK_SAMPLE_COUNT_4_BIT; }
-		if (counts & VK_SAMPLE_COUNT_2_BIT) { return VK_SAMPLE_COUNT_2_BIT; }
-
-		return VK_SAMPLE_COUNT_1_BIT;
-	}
-
-	bool has_stencil_component(VkFormat format)
-	{
-		return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
-	}
-
-	bool is_device_suitable(VkPhysicalDevice device)
-	{
-		QueueFamiliesIndices indices = find_queue_families(device);
-
-		bool extensions_supported = check_device_extensions_support(device);
-
-		bool swapchain_adequate = false;
-		if (extensions_supported)
-		{
-			SwapchainSupportDetails swapchain_support = query_swapchain_support(device);
-			swapchain_adequate = !swapchain_support.formats.empty() && !swapchain_support.present_modes.empty();
-		}
-
-		VkPhysicalDeviceFeatures supported_features{};
-		vkGetPhysicalDeviceFeatures(device, &supported_features);
-
-		return indices.is_complete() && extensions_supported && swapchain_adequate && supported_features.samplerAnisotropy;
-	}
-
 	QueueFamiliesIndices find_queue_families(VkPhysicalDevice device)
 	{
 		QueueFamiliesIndices indices;
@@ -1773,6 +1715,47 @@ private:
 		}
 
 		return indices;
+	}
+
+	bool has_stencil_component(VkFormat format)
+	{
+		return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
+	}
+
+	VkSampleCountFlagBits get_max_usable_sample_count()
+	{
+		VkPhysicalDeviceProperties physical_device_properties;
+		vkGetPhysicalDeviceProperties(physical_device, &physical_device_properties);
+
+		VkSampleCountFlags counts = physical_device_properties.limits.framebufferColorSampleCounts & physical_device_properties.limits.framebufferDepthSampleCounts;
+
+		if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
+		if (counts & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
+		if (counts & VK_SAMPLE_COUNT_16_BIT) { return VK_SAMPLE_COUNT_16_BIT; }
+		if (counts & VK_SAMPLE_COUNT_8_BIT) { return VK_SAMPLE_COUNT_8_BIT; }
+		if (counts & VK_SAMPLE_COUNT_4_BIT) { return VK_SAMPLE_COUNT_4_BIT; }
+		if (counts & VK_SAMPLE_COUNT_2_BIT) { return VK_SAMPLE_COUNT_2_BIT; }
+
+		return VK_SAMPLE_COUNT_1_BIT;
+	}
+
+	bool is_device_suitable(VkPhysicalDevice device)
+	{
+		QueueFamiliesIndices indices = find_queue_families(device);
+
+		bool extensions_supported = check_device_extensions_support(device);
+
+		bool swapchain_adequate = false;
+		if (extensions_supported)
+		{
+			SwapchainSupportDetails swapchain_support = query_swapchain_support(device);
+			swapchain_adequate = !swapchain_support.formats.empty() && !swapchain_support.present_modes.empty();
+		}
+
+		VkPhysicalDeviceFeatures supported_features{};
+		vkGetPhysicalDeviceFeatures(device, &supported_features);
+
+		return indices.is_complete() && extensions_supported && swapchain_adequate && supported_features.samplerAnisotropy;
 	}
 
 	bool check_device_extensions_support(VkPhysicalDevice device)
@@ -1954,12 +1937,6 @@ private:
 		return shader_module;
 	}
 
-	static void framebuffer_resize_callback(GLFWwindow* window, int width, int height)
-	{
-		auto app = reinterpret_cast<VkApp*>(glfwGetWindowUserPointer(window));
-		app->framebuffer_resized = true;
-	}
-
 	void input_process(GLFWwindow* window)
 	{
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_TRUE)
@@ -1982,6 +1959,12 @@ private:
 		{
 			camera.process_keyboard_input(RIGHT, delta_time);
 		}
+	}
+
+	static void framebuffer_resize_callback(GLFWwindow* window, int width, int height)
+	{
+		auto app = reinterpret_cast<VkApp*>(glfwGetWindowUserPointer(window));
+		app->framebuffer_resized = true;
 	}
 
 	static void mouse_callback(GLFWwindow* window, double x_pos_in, double y_pos_in)
@@ -2008,6 +1991,23 @@ private:
 	static void scroll_callback(GLFWwindow* window, double x_offset, double y_offset)
 	{
 		camera.process_mouse_scroll(static_cast<float>(y_offset));
+	}
+
+	void populate_debug_messenger_create_info(VkDebugUtilsMessengerCreateInfoEXT& create_info)
+	{
+		create_info = {};
+		create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+		create_info.messageSeverity =
+			//VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | 
+			//VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+			VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+			VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+		create_info.messageType =
+			VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+			VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
+			VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+		create_info.pfnUserCallback = debug_callback;
+		create_info.pUserData = nullptr;
 	}
 
 	static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
