@@ -46,7 +46,8 @@ const int MAX_FRAMES_IN_FLIGHT = 2;
 uint32_t current_frame = 0;
 
 const std::string MODEL_PATH = "../../resources/models/viking_room.obj";
-const std::string TEXTURE_PATH = "../../resources/textures/viking_room.png";
+const std::string TEXTURE_PATH = "../../resources/textures/container.jpg";
+const std::string TEXTURE_PATH2 = "../../resources/textures/awesomeface.png";
 
 
 const std::vector<const char*> device_extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
@@ -166,35 +167,35 @@ struct UniformBufferObject
 
 const std::vector<Vertex> global_vertices =
 {
-	{{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-	{{ 0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-	{{ 0.5f,  0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-	{{-0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-	
- 	{{ 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
- 	{{ 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
- 	{{ 0.5f,  0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
- 	{{ 0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-	
-	{{ 0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-	{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-	{{-0.5f,  0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+	{{ 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+	{{ 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
 	{{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+	{{ 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
 
-	{{-0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-	{{-0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-	{{-0.5f,  0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+	{{ 0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+	{{-0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
 	{{-0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+	{{ 0.5f,  0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
 
-	{{-0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-	{{ 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-	{{ 0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}},
-	{{-0.5f,  0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
+	{{-0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+	{{-0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+	{{-0.5f,  0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
 
-	{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
-	{{ 0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
-	{{ 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-	{{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 1.0f}, {1.0f, 1.0f}}
+	{{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+	{{ 0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{ 0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+	{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+
+	{{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+	{{-0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{ 0.5f,  0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+	{{ 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+
+	{{ 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+	{{ 0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{-0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+	{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, 1.0f}}
 };
 
 const std::vector<uint32_t> global_indices =
@@ -277,9 +278,9 @@ private:
 		VkImageView texture_image_view;
 		VkSampler texture_sampler;
 	};
-
+	
 	std::vector<Texture> textures;
-	std::vector<std::string> texture_paths = { "../../resources/textures/container.jpg" };
+	std::vector<std::string> texture_paths = {"../../resources/textures/container.jpg", "../../resources/textures/awesomeface.png"};
 
 	VkImage depth_image;
 	VkDeviceMemory depth_image_memory;
@@ -325,8 +326,10 @@ private:
 		create_color_resources();
 		create_depth_resources();
 		create_framebuffers();
+
 		create_textures();
-		// load_model();
+
+		//load_model();
 		create_vertex_buffer();
 		create_index_buffer();
 		create_uniform_buffers();
@@ -685,10 +688,10 @@ private:
 		ubo_layout_binding.descriptorCount = 1;
 		ubo_layout_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 		ubo_layout_binding.pImmutableSamplers = nullptr;
-		
+
 		std::vector<VkDescriptorSetLayoutBinding> bindings = {ubo_layout_binding};
 
-		for (uint32_t i = 0; i < textures.size(); i++)
+		for (uint32_t i = 0; i < texture_paths.size(); i++)
 		{
 			VkDescriptorSetLayoutBinding sampler_layout_binding{};
 			sampler_layout_binding.binding = 1 + i;
@@ -699,7 +702,6 @@ private:
 
 			bindings.push_back(sampler_layout_binding);
 		}
-	
 
 		VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info{};
 		descriptor_set_layout_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -1057,7 +1059,7 @@ private:
 		pool_sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		pool_sizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 		pool_sizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		pool_sizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+		pool_sizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * textures.size());
 
 		VkDescriptorPoolCreateInfo descriptor_pool_create_info{};
 		descriptor_pool_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -1090,44 +1092,42 @@ private:
 			descriptor_buffer_info.range = sizeof(UniformBufferObject);
 
 			std::vector<VkDescriptorImageInfo> descriptor_image_infos;
-			for (uint32_t j = 0; j < textures.size(); j++)
+			for (const auto &texture : textures)
 			{
 				VkDescriptorImageInfo descriptor_image_info{};
 				descriptor_image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				descriptor_image_info.imageView = textures[j].texture_image_view;
-				descriptor_image_info.sampler = textures[j].texture_sampler;
-
+				descriptor_image_info.imageView = texture.texture_image_view;
+				descriptor_image_info.sampler = texture.texture_sampler;
+				
 				descriptor_image_infos.push_back(descriptor_image_info);
 			}
-			
-			std::vector<VkWriteDescriptorSet> write_descriptor_sets{};
-			VkWriteDescriptorSet write_descriptor_set{};
-			write_descriptor_set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			write_descriptor_set.dstSet = descriptor_sets[i];
-			write_descriptor_set.dstBinding = 0;
-			write_descriptor_set.dstArrayElement = 0;
-			write_descriptor_set.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			write_descriptor_set.descriptorCount = 1;
-			write_descriptor_set.pBufferInfo = &descriptor_buffer_info;
-			write_descriptor_set.pImageInfo = nullptr;
-			write_descriptor_set.pTexelBufferView = nullptr;
-			write_descriptor_sets.push_back(write_descriptor_set);
 
+			std::vector<VkWriteDescriptorSet> write_descriptor_sets(1);
+			write_descriptor_sets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			write_descriptor_sets[0].dstSet = descriptor_sets[i];
+			write_descriptor_sets[0].dstBinding = 0;
+			write_descriptor_sets[0].dstArrayElement = 0;
+			write_descriptor_sets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			write_descriptor_sets[0].descriptorCount = 1;
+			write_descriptor_sets[0].pBufferInfo = &descriptor_buffer_info;
+			write_descriptor_sets[0].pImageInfo = nullptr;
+			write_descriptor_sets[0].pTexelBufferView = nullptr;
 
 			for (uint32_t j = 0; j < textures.size(); j++)
 			{
-				VkWriteDescriptorSet write_descriptor_set_sampler{};
-				write_descriptor_set_sampler.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-				write_descriptor_set_sampler.dstSet = descriptor_sets[i];
-				write_descriptor_set_sampler.dstBinding = 1 + j;
-				write_descriptor_set_sampler.dstArrayElement = 0;
-				write_descriptor_set_sampler.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-				write_descriptor_set_sampler.descriptorCount = 1;
-				write_descriptor_set_sampler.pBufferInfo = nullptr;
-				write_descriptor_set_sampler.pImageInfo = &descriptor_image_infos[j];
-				write_descriptor_set_sampler.pTexelBufferView = nullptr;
+				VkWriteDescriptorSet write_descriptor_set{};
 
-				write_descriptor_sets.push_back(write_descriptor_set_sampler);
+				write_descriptor_set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				write_descriptor_set.dstSet = descriptor_sets[i];
+				write_descriptor_set.dstBinding = 1 + j;
+				write_descriptor_set.dstArrayElement = 0;
+				write_descriptor_set.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				write_descriptor_set.descriptorCount = 1;
+				write_descriptor_set.pBufferInfo = nullptr;
+				write_descriptor_set.pImageInfo = &descriptor_image_infos[j];
+				write_descriptor_set.pTexelBufferView = nullptr;
+
+				write_descriptor_sets.push_back(write_descriptor_set);
 			}
 
 			vkUpdateDescriptorSets(device, static_cast<uint32_t>(write_descriptor_sets.size()), write_descriptor_sets.data(), 0, nullptr);
@@ -1293,9 +1293,9 @@ private:
 
 		UniformBufferObject ubo{};
 		ubo.model = glm::mat4(1.0f);
-		ubo.model = glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 		ubo.view = camera.get_view_matrix();
 		ubo.projection = glm::perspective(glm::radians(camera.zoom), swapchain_extent.width / (float)swapchain_extent.height, 0.1f, 100.0f);
+		ubo.projection[1][1] *= -1;
 		
 		void* data;
 		vkMapMemory(device, uniform_buffers_memory[current_image], 0, sizeof(ubo), 0, &data);

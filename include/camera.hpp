@@ -69,7 +69,7 @@ public:
         y_offset *= mouse_sensitivity;
 
         yaw -= x_offset;
-        pitch -= y_offset;
+        pitch += y_offset;
 
         if (pitch > 89.0f)
             pitch = 89.0f;
