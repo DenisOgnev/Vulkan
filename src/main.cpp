@@ -282,6 +282,7 @@ private:
 	Texture texture;
 	Texture texture2;
 	
+	std::vector<Texture> textures;
 	std::vector<std::string> texture_paths = {"../../resources/textures/container.jpg", "../../resources/textures/awesomeface.png"};
 
 	VkImage depth_image;
@@ -328,6 +329,9 @@ private:
 		create_color_resources();
 		create_depth_resources();
 		create_framebuffers();
+
+		create_textures();
+
 		create_texture_image();
 		create_texture_image_view();
 		create_texture_sampler();
@@ -935,6 +939,21 @@ private:
 
 			if (vkCreateFramebuffer(device, &framebuffer_create_info, nullptr, &swapchain_framebuffers[i]) != VK_SUCCESS)
 				throw std::runtime_error("Failed to create framebuffer");
+		}
+	}
+
+	void create_textures()
+	{
+		for (const auto &path : texture_paths)
+		{
+			Texture texture{};
+
+			int tex_width, tex_height, tex_channels;
+			stbi_uc* pixels = stbi_load(path.c_str(), &tex_width, &tex_height, &tex_channels, STBI_rgb_alpha);
+			VkDeviceSize image_size = tex_width * tex_height * 4;
+			texture.mip_levels = static_cast<uint32_t>(std::floor(std::log2(std::max(tex_width, tex_height)))) + 1;
+
+			
 		}
 	}
 
