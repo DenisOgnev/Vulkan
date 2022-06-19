@@ -371,6 +371,14 @@ private:
 	{
 		cleanup_swapchain();
 
+		for (const auto &texture : textures)
+		{
+			vkDestroySampler(device, texture.texture_sampler, nullptr);
+			vkDestroyImageView(device, texture.texture_image_view, nullptr);
+			vkDestroyImage(device, texture.texture_image, nullptr);
+			vkFreeMemory(device, texture.texture_image_memory, nullptr);
+		}
+
 		vkDestroySampler(device, texture.texture_sampler, nullptr);
 		vkDestroyImageView(device, texture.texture_image_view, nullptr);
 		vkDestroyImage(device, texture.texture_image, nullptr);
@@ -953,7 +961,17 @@ private:
 			VkDeviceSize image_size = tex_width * tex_height * 4;
 			texture.mip_levels = static_cast<uint32_t>(std::floor(std::log2(std::max(tex_width, tex_height)))) + 1;
 
-			
+			if (!pixels)
+				throw std::runtime_error("Failed to load texture image by path: " + path);
+
+			create_texture_image(image_size, pixels, tex_width, tex_height, texture.mip_levels, texture.texture_image, texture.texture_image_memory);
+			stbi_image_free(pixels);
+
+			texture.texture_image_view = create_image_view(texture.texture_image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, texture.mip_levels);
+
+			create_texture_sampler(texture.texture_sampler, texture.mip_levels);
+
+			textures.push_back(texture);
 		}
 	}
 
